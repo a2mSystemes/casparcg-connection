@@ -1,6 +1,7 @@
 import {Promise} from "es6-promise";
 import {EventEmitter} from "hap";
 import {CasparCGSocket, SocketState} from "./lib/CasparCGSocket";
+import {OSCSocket} from "./lib/OSCSocket";
 import {AMCP, AMCPUtil as AMCPUtilNS} from "./lib/AMCP";
 // AMCPUtilNS
 import CasparCGSocketResponse = AMCPUtilNS.CasparCGSocketResponse;
@@ -20,19 +21,24 @@ import {Param as ParamNS} from "./lib/ParamSignature";
 import Param = ParamNS.Param;
 import TemplateData = ParamNS.TemplateData;
 // Event NS
-import {CasparCGSocketStatusEvent, CasparCGSocketCommandEvent, CasparCGSocketResponseEvent, LogEvent} from "./lib/event/Events";
+import {BaseEvent, CasparCGSocketStatusEvent, CasparCGSocketCommandEvent, CasparCGSocketResponseEvent, LogEvent, OSCSocketEvent} from "./lib/event/Events";
 // Callback NS
 import {Callback as CallbackNS} from "./lib/global/Callback";
 import IBooleanCallback = CallbackNS.IBooleanCallback;
 import IErrorCallback = CallbackNS.IErrorCallback;
 import IStringCallback = CallbackNS.IStringCallback;
 import ISocketStatusCallback = CallbackNS.ISocketStatusCallback;
+//<<<<<<< HEAD
 // Config NS
 import {Config as ConfigNS} from "./lib/Config";
 import CasparCGConfig = ConfigNS.Intermediate.CasparCGConfig;
 // Response NS
 import {Response as ResponseNS} from "./lib/ResponseParsers";
 import CasparCGPaths = ResponseNS.CasparCGPaths;
+//=======
+import IOSCCallback = CallbackNS.IOSCCallback;
+
+//>>>>>>> feature/osc
 
 /**
  * CasparCG Protocols
@@ -256,8 +262,8 @@ export interface ICasparCGConnection {
 /**
  * The main object and entrypoint for all interactions. `CasparCG` allows for flexible configuration, re-configuration and events/callbacks.
  * It implements all [[AMCP]] commands as high-level methods with convenient interfaces.
- * 
- * There is a single [[CasparCGSocket]] pr. `CasparCG` object. 
+ *
+ * There is a single [[CasparCGSocket]] pr. `CasparCG` object.
  * `CasparCG` should be the only public interface to interact directly with.
  */
 export class CasparCG extends EventEmitter implements ICasparCGConnection, ConnectionOptions, CasparCGProtocols.v2_1.AMCP {
@@ -268,10 +274,17 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	private _autoReconnectInterval: number;
 	private _autoReconnectAttempts: number;
 	private _socket: CasparCGSocket;
-	private _queuedCommands: Array<IAMCPCommand> = [];
-	private _sentCommands: Array<IAMCPCommand> = [];
+//<<<<<<< HEAD
+//	private _queuedCommands: Array<IAMCPCommand> = [];
+//	private _sentCommands: Array<IAMCPCommand> = [];
 	private _configPromise: Promise<CasparCGConfig>;
 	private _pathsPromise: Promise<CasparCGPaths>;
+//=======
+	private _oscListener: OSCSocket = null;
+	private _osc: number;
+	private _queuedCommands: Array<IAMCPCommand> = new Array<IAMCPCommand>();
+	private _sentCommands: Array<IAMCPCommand> = new Array<IAMCPCommand>();
+//>>>>>>> feature/osc
 
 	/**
 	 * Try to connect upon creation.
@@ -279,32 +292,40 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	public autoConnect: boolean | undefined = undefined;
 
 	/**
-	 * @todo: document  
+	 * @todo: document
 	 */
 	public autoServerVersion: boolean | undefined = undefined;
 
 	/**
-	 * @todo: document  
+	 * @todo: document
 	 */
 	public serverVersion: ServerVersion | undefined = undefined;
 
 	/**
-	 * @todo: document  
+	 * @todo: document
 	 */
 	public queueMode: QueueMode | undefined = undefined;
 
 	/**
-	 * Setting this to true will print out logging to the `Console`, in addition to the optinal [[onLog]] and [[LogEvent.LOG]].  
+	 * Setting this to true will print out logging to the `Console`, in addition to the optinal [[onLog]] and [[LogEvent.LOG]].
 	 */
 	public debug: boolean | undefined = undefined;
 
+	/*
+	 * Public callbacks for osc events
+	 */
+	public onStageMessage: IOSCCallback = undefined;
+	public onMixerMessage: IOSCCallback = undefined;
+	public onDiagMessage: IOSCCallback = undefined;
+	public onOutputMessage: IOSCCallback = undefined;
+
 	/**
-	 * Callback for all logging. 
+	 * Callback for all logging.
 	 */
 	public onLog: IStringCallback | undefined = undefined;
 
 	/**
-	 * Callback for all status updates from the `CasparCGSocket`. 
+	 * Callback for all status updates from the `CasparCGSocket`.
 	 */
 	public onConnectionStatus: ISocketStatusCallback | undefined = undefined;
 
@@ -330,34 +351,34 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * If the constructor gets called with no parameters, all properties of the CasparCG object will match all default properties defined by [[IConnectionOptions]].
-	 * 
+	 *
 	 ```
-	 var con = new CasparCG(); 	
+	 var con = new CasparCG();
 	 // host = 127.0.0.1, port = 5250, autoConnect = true ...
-	 
-	  con.play(1, 1, "amb");		
+
+	  con.play(1, 1, "amb");
 	  // you can interact with the server, but you have no knowledge of the conenction status until the onConnect event- or callback gets invoked
 	 // the `PlayCommand` will however be queued and fired when the connection gets established
 	 con.close();
 	 ```
-	 *  
+	 *
 	 * @param host		Defaults to `IConnectionOptions.host`
 	 * @param port		Defaults to `IConnectionOptions.host`
-	 * @param options	An object with combination of properties defined by `IConnectionOptions`. All properties not explicitly set will fall back to the defaults defined by `IConnectionOptions`. 
+	 * @param options	An object with combination of properties defined by `IConnectionOptions`. All properties not explicitly set will fall back to the defaults defined by `IConnectionOptions`.
 	 *
 	 * All callbacks including [[onConnected]] will be set prior trying to establish connection, so the `CasparCG` object will give back all events even if [[CasparCG.autoConnect]] is `true`.
 	 */
 	public constructor();
 	/**
 	 * Set host/port directly in constructor:
-	 * 
+	 *
 	 ```
-	 var con = new CasparCG("192.168.0.1", 5251);	
+	 var con = new CasparCG("192.168.0.1", 5251);
 	 // host = 192.168.0.1, port = 5251, autoConnect = true ...
 
 	 // change properties after the constructor
 	 con.debug = true;
-	 
+
 	 con.play(1, 1, "amb");
 	 con.close();
 	 ```
@@ -366,43 +387,43 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	public constructor(host?: string, port?: number);
 	/**
 	 * Callbacks and events after constructor:
-	 * 
+	 *
 	 ```
-	 var con = new CasparCG({host: "192.168.0.1", autoConnect: false});	
+	 var con = new CasparCG({host: "192.168.0.1", autoConnect: false});
 	 // host = 192.168.0.1, port = 5250, autoConnect = false ...
-	 
+
 	 // add onLog callback after constructor
-	 con.onLog = function(logMessage){ console.log(logMessage); };						
-	 
+	 con.onLog = function(logMessage){ console.log(logMessage); };
+
 	 // add eventlistener to the conenction event before connecting
-	 con.on(CasparCGSocketStatusEvent.CONNECTED, onConnection(event));		
-	 
+	 con.on(CasparCGSocketStatusEvent.CONNECTED, onConnection(event));
+
 	 con.connect();
 	 ```
 	 * Callback in constructor:
-	 * 
+	 *
 	 ```
-	 var con = new CasparCG({host: "192.168.0.1", onConnect: onConnectedCallback});	
-	 // Connection callbacks can be set in the constructor and will be registered before autoConnect invokes. 
+	 var con = new CasparCG({host: "192.168.0.1", onConnect: onConnectedCallback});
+	 // Connection callbacks can be set in the constructor and will be registered before autoConnect invokes.
 	 // This ensures that you recieve all callbacks
 	 ```
 	 * Inline function syntax:
-	 * 
+	 *
 	 ```
 	 var con = new CasparCG({host: "192.168.0.1", onConnect: function(connected) {
 		 	// do something once we get connected
 		 	console.log("Are we conencted?", connected)
 	 	}
-	});	
+	});
 	 ```
 	 * Inline fat arrow syntax:
-	 * 
+	 *
 	 ```
 	 var con = new CasparCG({host: "192.168.0.1", onConnect: (connected) => {
 		 	// do something once we get connected
 		 	("Are we conencted?", connected)
 	 	}
-	});	
+	});
 	 ```
 	 *
 	 */
@@ -423,6 +444,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 		}
 
 		this._createNewSocket(options);
+		this._createOSCListener();
 
 		this.on(CasparCGSocketStatusEvent.STATUS, (event: CasparCGSocketStatusEvent) => this._onSocketStatusChange(event));
 		this.on(CasparCGSocketStatusEvent.TIMEOUT, () => this._onSocketStatusTimeout());
@@ -435,7 +457,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _createNewSocket(options?: IConnectionOptions, enforceRecreation: boolean = false): void {
 		let hasNewOptions = false;
@@ -479,8 +501,29 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
+	 *
+	 */
+	private _createOSCListener() {
+		this._oscListener = new OSCSocket(this.osc);
+		this.setParent(this._oscListener);
+
+		this._oscListener.on(OSCSocketEvent.newStageMessage, (event) => {
+			if (this.onStageMessage) this.onStageMessage(event.params.address, event.params.value);
+		});
+		this._oscListener.on(OSCSocketEvent.newMixerMessage, (event) => {
+			if (this.onMixerMessage) this.onMixerMessage(event.params.address, event.params.value);
+		});
+		this._oscListener.on(OSCSocketEvent.newDiagMessage, (event) => {
+			if (this.onDiagMessage) this.onDiagMessage(event.params.address, event.params.value);
+		});
+		this._oscListener.on(OSCSocketEvent.newOutputMessage, (event) => {
+			if (this.onOutputMessage) this.onOutputMessage(event.params.address, event.params.value);
+		});
+	}
+
+	/**
 	 * Creates a new [[CasparCGSocket]] and connects.
-	 * 
+	 *
 	 * @param options	Setting new [[ICasparCGConnection]] properties will override each individual property allready defined on the `CasparCG` object. Existing properties not overwritten by this `options` object will remain.
 	 */
 	public connect(options?: IConnectionOptions): void {
@@ -491,6 +534,9 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 		if (this._socket) {
 			this._socket.connect();
 		}
+		if (this._oscListener) {
+			this._oscListener.listen();
+		}
 	}
 
 	/**
@@ -500,10 +546,13 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 		if (this._socket) {
 			this._socket.disconnect();
 		}
+		if (this._oscListener) {
+			this._oscListener.close();
+		}
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public reconnect(): void {
 		this._createNewSocket(undefined, true);
@@ -511,7 +560,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public get host(): string{
 		return this._host;
@@ -519,8 +568,8 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Setting the `host` will create a new [[CasparCGSocket]] connection.
-	 * 
-	 * The new `CasparCGSocket` will `autoConnect` if the old socket was either successfully connected, or currently reconnecting. Changing the host resets the number of [[CasparCG.autoReconnectAttempts]]. 
+	 *
+	 * The new `CasparCGSocket` will `autoConnect` if the old socket was either successfully connected, or currently reconnecting. Changing the host resets the number of [[CasparCG.autoReconnectAttempts]].
 	 */
 	public set host(host: string){
 		if (this._host !== host) {
@@ -536,7 +585,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public get port(): number{
 		return this._port;
@@ -544,7 +593,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Setting the `port` will create a new [[CasparCGSocket]] connection.
-	 * 
+	 *
 	 * The new `CasparCGSocket` will `autoConnect` if the old socket was either successfully connected, or currently reconnecting. Changing the host resets the number of [[CasparCG.autoReconnectAttempts]].
 	 */
 	public set port(port: number){
@@ -561,6 +610,23 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
+	 *
+	 */
+	public get osc(): number {
+		return this._osc; // @todo
+	}
+
+	/**
+	 *
+	 */
+	public set osc(port: number) {
+		if (this._osc !== port) {
+			this._osc = port;
+			if (this._oscListener) this._oscListener.port = port;
+		}
+	}
+
+	/**
 	 * Try to reconnect in case of unintentionally loss of connection, or in case of failed connection in the first place.
 	 */
 	public get autoReconnect(): boolean {
@@ -568,7 +634,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public set autoReconnect(autoReconnect: boolean) {
 		this._autoReconnect = autoReconnect;
@@ -586,7 +652,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 
 	/**
-	 * 
+	 *
 	 */
 	public set autoReconnectInterval(autoReconnectInterval: number) {
 		this._autoReconnectInterval = autoReconnectInterval;
@@ -595,14 +661,14 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 		}
 	}
 	/**
-	 * Max number of attempts of connection during reconnection. This value resets once the reconnection is over (either in case of successfully reconnecting, changed connection properties such as `host` or `port` or by being manually cancelled). 
+	 * Max number of attempts of connection during reconnection. This value resets once the reconnection is over (either in case of successfully reconnecting, changed connection properties such as `host` or `port` or by being manually cancelled).
 	 */
 	public get autoReconnectAttempts(): number {
 		return this._autoReconnectAttempts;
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public set autoReconnectAttempts(autoReconnectAttempts: number) {
 		this._autoReconnectAttempts = autoReconnectAttempts;
@@ -612,7 +678,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public get connectionOptions(): ConnectionOptions {
 		let options: ConnectionOptions = new ConnectionOptions({});
@@ -627,21 +693,21 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public get connected(): boolean{
 		return this._connected ||  false;
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public get connectionStatus(): SocketState{
 		return this._socket.socketStatus;
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _onSocketStatusChange(socketStatus: CasparCGSocketStatusEvent): void {
 		let connected = (socketStatus.valueOf() &  SocketState.connected) === SocketState.connected;
@@ -686,7 +752,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _onSocketStatusTimeout(): void {
 		let shouldReset: Boolean = false;
@@ -705,21 +771,21 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public get commandQueue(): Array<IAMCPCommand> {
 		return this._queuedCommands;
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _onSocketError(error: Error): void {
 		this._log(error);
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _log(args: any): void {
 		if (args instanceof Error) {
@@ -792,7 +858,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 
 	/**
-	 * 
+	 *
 	 */
 	private _addQueuedCommand(command: IAMCPCommand): IAMCPCommand {
 		this._queuedCommands.push(command);
@@ -819,28 +885,28 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _handleSocketResponse(socketResponse: CasparCGSocketResponse): void {
 		/*
-		
+
 		100 [action] - Information about an event.
 		101 [action] - Information about an event. A line of data is being returned.
-		
+
 		200 [command] OK	- The command has been executed and several lines of data (seperated by \r\n) are being returned (terminated with an additional \r\n)
 		201 [command] OK	- The command has been executed and data (terminated by \r\n) is being returned.
 		202 [command] OK	- The command has been executed.
-		
+
 		400 ERROR	- Command not understood
 		401 [command] ERROR	- Illegal video_channel
 		402 [command] ERROR	- Parameter missing
 		403 [command] ERROR	- Illegal parameter
 		404 [command] ERROR	- Media file not found
-		
+
 		500 FAILED	- Internal server error
 		501 [command] FAILED	- Internal server error
 		502 [command] FAILED	- Media file unreadable
-		
+
 		*/
 
 		// receive data & handle possible timeout first
@@ -879,7 +945,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _handleInvalidSocketResponse(socketResponse: CasparCGSocketResponse): void {
 		if (socketResponse.responseString === "\r\n" && this._socket.isRestarting && this.serverVersion < 2100) {
@@ -888,7 +954,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	private _expediteCommand(flushSent: boolean = false): void {
 
@@ -1045,7 +1111,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	public loadHtmlPageBgAuto(channel: number, layer: number = NaN, url: string, transition?: Enum.Transition|string, transitionDuration?: number, transitionEasing?: Enum.Ease|string, transitionDirection?: Enum.Direction|string): Promise<IAMCPCommand> {
 		return this.do(new AMCP.LoadHtmlPageBgCommand({channel: channel, layer: layer, url: url, transition: transition, transitionDuration: transitionDuration, transitionEasing: transitionEasing, transitionDirection: transitionDirection, auto: true}));
@@ -1117,7 +1183,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	}
 
 	/**
-	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#CG_REMOVE> 
+	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#CG_REMOVE>
 	 */
 	public cgRemove(channel: number, layer?: number, flashLayer?: number): Promise<IAMCPCommand> {
 		return this.do(new AMCP.CGRemoveCommand({channel: channel, layer: layer, flashLayer: flashLayer}));
@@ -1864,11 +1930,11 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Retrieves information about a running template or the templatehost.
-	 * 
+	 *
 	 * Calling `infoDelay` without `flashLayer` parameter is the same as calling the convenience method [[templateHostInfo]].
-	 * 
+	 *
 	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#CG_INFO>
-	 * 
+	 *
 	 * @param flashLayer	If not specified, information about the `TemplateHost` will be returned.
 	 */
 	public cgInfo(channel: number, layer?: number, flashLayer?: number): Promise<IAMCPCommand> {
@@ -1877,7 +1943,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Convenience method for calling [[cgInfo]] to return information about `TemplateHost` for a given layer.
-	 * 
+	 *
 	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#CG_INFO>
 	 */
 	public templateHostInfo(channel: number, layer?: number): Promise<IAMCPCommand> {
@@ -1901,7 +1967,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 	public logLevel(level: string): Promise<IAMCPCommand>;
 	/**
 	 * Sets the server's [[LogLevel]].
-	 * 
+	 *
 	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#LOG_LEVEL>
 	 */
 	public logLevel(enumOrString: Enum.LogLevel|string): Promise<IAMCPCommand> {
@@ -1910,9 +1976,9 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Enabling or disabling logging for a given [[LogCategory]].
-	 * 
+	 *
 	 * Convenience methods [[logCalltrace]] and [[logCommunication]] are available.
-	 * 
+	 *
 	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#LOG_CATEGORY>
 	 */
 	public logCategory(category: Enum.LogCategory, enabled: boolean): Promise<IAMCPCommand>;
@@ -1958,7 +2024,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Convenience method for calling [[help]] with no parameters.
-	 * 
+	 *
 	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#HELP>
 	 */
 	public getCommands(): Promise<IAMCPCommand> {
@@ -1981,7 +2047,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Convenience method for calling [[helpProducer]] with no parameters.
-	 * 
+	 *
 	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#HELP_PRODUCER>
 	 */
 	public getProducers(): Promise<IAMCPCommand> {
@@ -2004,7 +2070,7 @@ export class CasparCG extends EventEmitter implements ICasparCGConnection, Conne
 
 	/**
 	 * Convenience method for calling [[helpConsumer]] with no parameters.
-	 * 
+	 *
 	 * <http://casparcg.com/wiki/CasparCG_2.1_AMCP_Protocol#HELP_CONSUMER>
 	 */
 	public getConsumers(): Promise<IAMCPCommand> {

@@ -4,14 +4,15 @@ import IBooleanCallback = CallbackNS.IBooleanCallback;
 import IErrorCallback = CallbackNS.IErrorCallback;
 import IStringCallback = CallbackNS.IStringCallback;
 import ISocketStatusCallback = CallbackNS.ISocketStatusCallback;
+import IOSCCallback = CallbackNS.IOSCCallback;
 
 /**
- * 
+ *
  */
 export namespace Options {
 
 	/**
-	 * 
+	 *
 	 */
 	export enum QueueMode  {
 		// SALVO 		= 1,
@@ -20,7 +21,7 @@ export namespace Options {
 	}
 
 	/**
-	 * 
+	 *
 	 */
 	export enum ServerVersion  {
 		V2xx = 2000,
@@ -31,11 +32,12 @@ export namespace Options {
 }
 
 /**
- * 
+ *
  */
 export interface IConnectionOptions {
 	host?: string;
 	port?: number;
+	osc?: number;
 	autoConnect?: boolean;
 	autoReconnect?: boolean;
 	autoReconnectInterval?: number;
@@ -44,6 +46,10 @@ export interface IConnectionOptions {
 	serverVersion?: Options.ServerVersion;
 	queueMode?: Options.QueueMode;
 	debug?: boolean;
+	onStageMessage?: IOSCCallback;
+	onMixerMessage?: IOSCCallback;
+	onDiagMessage?: IOSCCallback;
+	onOutputMessage?: IOSCCallback;
 	onLog?: IStringCallback;
 	onConnectionStatus?: ISocketStatusCallback;
 	onConnectionChanged?: IBooleanCallback;
@@ -53,28 +59,50 @@ export interface IConnectionOptions {
 }
 
 /**
- * 
+ *
  */
 export class ConnectionOptions implements IConnectionOptions {
-	public host: string | undefined = "localhost";
-	public port: number | undefined = 5250;
-	public autoConnect: boolean | undefined = true;
-	public autoReconnect: boolean | undefined = true;
-	public autoReconnectInterval: number | undefined = 1000;
-	public autoReconnectAttempts: number | undefined = Infinity;
-	public autoServerVersion?: boolean = true;
-	public serverVersion?: Options.ServerVersion | undefined = Options.ServerVersion.V2xx;
-	public queueMode: Options.QueueMode | undefined = Options.QueueMode.SEQUENTIAL;	// @todo: change to SALVO once server has command UIDs https://github.com/CasparCG/Server/issues/475
-	public debug: boolean | undefined = false;
-	public onLog: IStringCallback | undefined = undefined;
-	public onConnectionStatus: ISocketStatusCallback | undefined = undefined;
-	public onConnectionChanged: IBooleanCallback | undefined = undefined;
-	public onConnected: IBooleanCallback | undefined = undefined;
-	public onDisconnected: IBooleanCallback | undefined = undefined;
-	public onError: IErrorCallback | undefined = undefined;
+// <<<<<<< HEAD
+// 	public host: string | undefined = "localhost";
+// 	public port: number | undefined = 5250;
+// 	public autoConnect: boolean | undefined = true;
+// 	public autoReconnect: boolean | undefined = true;
+// 	public autoReconnectInterval: number | undefined = 1000;
+// 	public autoReconnectAttempts: number | undefined = Infinity;
+// 	public autoServerVersion?: boolean = true;
+// 	public serverVersion?: Options.ServerVersion | undefined = Options.ServerVersion.V2xx;
+// 	public queueMode: Options.QueueMode | undefined = Options.QueueMode.SEQUENTIAL;	// @todo: change to SALVO once server has command UIDs https://github.com/CasparCG/Server/issues/475
+// 	public debug: boolean | undefined = false;
+// 	public onLog: IStringCallback | undefined = undefined;
+// 	public onConnectionStatus: ISocketStatusCallback | undefined = undefined;
+// 	public onConnectionChanged: IBooleanCallback | undefined = undefined;
+// 	public onConnected: IBooleanCallback | undefined = undefined;
+// 	public onDisconnected: IBooleanCallback | undefined = undefined;
+// 	public onError: IErrorCallback | undefined = undefined;
+// =======
+	public host: string = "localhost";
+	public port: number = 5250;
+	public osc: number = 6250;
+	public autoConnect: boolean = true;
+	public autoReconnect: boolean = true;
+	public autoReconnectInterval: number = 1000;
+	public autoReconnectAttempts: number = Infinity;
+	public queueMode: Options.QueueMode = Options.QueueMode.SEQUENTIAL;	// @todo: change to SALVO once server has command UIDs https://github.com/CasparCG/Server/issues/475
+	public debug: boolean = false;
+	public onStageMessage: IOSCCallback = undefined;
+	public onMixerMessage: IOSCCallback = undefined;
+	public onDiagMessage: IOSCCallback = undefined;
+	public onOutputMessage: IOSCCallback = undefined;
+	public onLog: IStringCallback = undefined;
+	public onConnectionStatus: ISocketStatusCallback = undefined;
+	public onConnectionChanged: IBooleanCallback;
+	public onConnected: IBooleanCallback = undefined;
+	public onDisconnected: IBooleanCallback = undefined;
+	public onError: IErrorCallback = undefined;
+//>>>>>>> feature/osc
 
 	/**
-	 * 
+	 *
 	 */
 	constructor(host?: string, port?: number);
 	constructor(options?: IConnectionOptions);
